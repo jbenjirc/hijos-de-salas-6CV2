@@ -14,6 +14,7 @@
 #define BUFFER_SIZE 8192
 #define WWWROOT "../wwwroot"
 #define LOGFILE "../log/http.log"
+#define USERS_FILE "../../config/http_users.txt"
 
 CRITICAL_SECTION log_cs;
 int total_requests = 0;
@@ -92,7 +93,6 @@ void send_response(SOCKET client, int code, const char *msg, const char *type, c
 
 // --- /api/echo (POST) ---
 void handle_echo(SOCKET client, const char *body, const char *ip) {
-    // Escapar caracteres especiales para JSON
     char escaped_body[BUFFER_SIZE] = {0};
     if (body && strlen(body) > 0) {
         char *dst = escaped_body;
@@ -162,26 +162,20 @@ void serve_file(SOCKET client, const char *path, const char *ip, const char *met
     if (!content) {
         printf("Error: memoria insuficiente al servir archivo %s\n", path);
         fclose(file);
-        const char *msg = "<h1>500 Internal Server Error</h1>";
-        send_response(client, 500, "Internal Server Error", "text/html", msg);
+        send_response(client, 500, "Internal Server Error", "text/html", "<h1>500 Internal Server Error</h1>");
         total_errors++;
         return;
     }
 
     size_t bytes_read = fread(content, 1, size, file);
+    fclose(file);
     if (bytes_read != (size_t)size) {
-        printf("Error leyendo archivo %s\n", path);
         free(content);
-        fclose(file);
-        const char *msg = "<h1>500 Internal Server Error</h1>";
-        send_response(client, 500, "Internal Server Error", "text/html", msg);
+        send_response(client, 500, "Internal Server Error", "text/html", "<h1>500 Internal Server Error</h1>");
         total_errors++;
         return;
     }
 
-    fclose(file);
-
-    // Solo agregar null terminator para archivos de texto
     const char *mime_type = get_mime_type(path);
     if (strncmp(mime_type, "text/", 5) == 0 || 
         strcmp(mime_type, "application/javascript") == 0 ||
@@ -189,7 +183,6 @@ void serve_file(SOCKET client, const char *path, const char *ip, const char *met
         content[size] = '\0';
         send_response(client, 200, "OK", mime_type, content);
     } else {
-        // Para archivos binarios, enviar el contenido directamente después del header
         char header[1024];
         char date[64];
         time_t now = time(NULL);
@@ -208,10 +201,8 @@ void serve_file(SOCKET client, const char *path, const char *ip, const char *met
             
         if (len > 0 && len < (int)sizeof(header)) {
             send(client, header, len, 0);
-            // Para HEAD, no enviar el cuerpo
-            if (strcmp(method, "HEAD") != 0) {
+            if (strcmp(method, "HEAD") != 0)
                 send(client, content, size, 0);
-            }
         }
     }
 
@@ -224,17 +215,14 @@ void serve_file(SOCKET client, const char *path, const char *ip, const char *met
 DWORD WINAPI client_thread(LPVOID lpParam) {
     SOCKET client = ((SOCKET*)lpParam)[0];
     struct sockaddr_in clientAddr = ((struct sockaddr_in*)(((char*)lpParam) + sizeof(SOCKET)))[0];
-    char *bundle = (char*)lpParam;
-    
+    free(lpParam);
+
     char ip[32];
     strcpy(ip, inet_ntoa(clientAddr.sin_addr));
 
-    // Manejo de errores sin __try/__except
     char buffer[BUFFER_SIZE];
     int bytes = recv(client, buffer, BUFFER_SIZE - 1, 0);
     if (bytes <= 0) {
-        printf("Error recibiendo datos del cliente %s\n", ip);
-        free(bundle);
         closesocket(client);
         return 0;
     }
@@ -246,28 +234,21 @@ DWORD WINAPI client_thread(LPVOID lpParam) {
     if (sscanf(buffer, "%15s %255s", method, path) != 2) {
         send_response(client, 400, "Bad Request", "text/html", "<h1>400 Bad Request</h1>");
         total_errors++;
-        free(bundle);
         closesocket(client);
         return 0;
     }
 
     char *body = strstr(buffer, "\r\n\r\n");
-    if (body) body += 4; 
-    else body = "";
+    if (body) body += 4; else body = "";
 
     printf("%s %s %s\n", ip, method, path);
 
     if (strcmp(path, "/status") == 0) {
         handle_status(client, ip);
-    }
-    else if (strcmp(path, "/api/echo") == 0) {
-        if (_stricmp(method, "POST") == 0) {
-            handle_echo(client, body, ip);
-        } else {
-            handle_echo_info(client, ip);
-        }
-    }
-    else if (_stricmp(method, "GET") == 0 || _stricmp(method, "HEAD") == 0) {
+    } else if (strcmp(path, "/api/echo") == 0) {
+        if (_stricmp(method, "POST") == 0) handle_echo(client, body, ip);
+        else handle_echo_info(client, ip);
+    } else if (_stricmp(method, "GET") == 0 || _stricmp(method, "HEAD") == 0) {
         if (strcmp(path, "/") == 0) strcpy(path, "/index.html");
         char fullpath[512];
         snprintf(fullpath, sizeof(fullpath), "%s%s", WWWROOT, path);
@@ -278,7 +259,6 @@ DWORD WINAPI client_thread(LPVOID lpParam) {
         total_errors++;
     }
 
-    free(bundle);
     closesocket(client);
     return 0;
 }
@@ -291,9 +271,27 @@ int main() {
     int clientLen = sizeof(clientAddr);
 
     InitializeCriticalSection(&log_cs);
-    
-    // Crear directorio de log si no existe
+
+    // Crear carpetas necesarias
     system("mkdir \"../log\" 2>nul");
+    system("mkdir \"../../config\" 2>nul");
+
+    // Crear archivo de usuarios si no existe
+    FILE *fcheck = fopen(USERS_FILE, "r");
+    if (!fcheck) {
+        FILE *fnew = fopen(USERS_FILE, "w");
+        if (fnew) {
+            fprintf(fnew, "admin:1234\n");
+            fprintf(fnew, "test:test123\n");
+            fprintf(fnew, "guest:guest\n");
+            fclose(fnew);
+            printf("Archivo creado: %s con usuarios por defecto.\n", USERS_FILE);
+        } else {
+            printf("No se pudo crear archivo de usuarios: %s\n", USERS_FILE);
+        }
+    } else {
+        fclose(fcheck);
+    }
 
     if (WSAStartup(MAKEWORD(2,2), &wsa) != 0) {
         printf("Error inicializando Winsock\n");
@@ -309,18 +307,15 @@ int main() {
         return 1;
     }
 
-    // Permitir reutilizar la dirección
     int enable = 1;
-    if (setsockopt(server, SOL_SOCKET, SO_REUSEADDR, (char*)&enable, sizeof(enable)) == SOCKET_ERROR) {
-        printf("No se pudo setear SO_REUSEADDR\n");
-    }
+    setsockopt(server, SOL_SOCKET, SO_REUSEADDR, (char*)&enable, sizeof(enable));
 
     serverAddr.sin_family = AF_INET;
     serverAddr.sin_addr.s_addr = INADDR_ANY;
     serverAddr.sin_port = htons(PORT);
 
     if (bind(server, (struct sockaddr*)&serverAddr, sizeof(serverAddr)) == SOCKET_ERROR) {
-        printf("bind fallo (%d). Puerto en uso?\n", WSAGetLastError());
+        printf("bind fallo (%d)\n", WSAGetLastError());
         closesocket(server);
         WSACleanup();
         getchar();
@@ -335,44 +330,27 @@ int main() {
         return 1;
     }
 
-    printf("   Servidor HTTP escuchando en puerto %d...\n", PORT);
+    printf("    Servidor HTTP escuchando en puerto %d...\n", PORT);
     printf("   Rutas: /, /status, /api/echo (GET y POST)\n");
-    printf("   Directorio: %s\n", WWWROOT);
-    printf("---------------------------------------------\n");
+    printf("   Directorio raiz: %s\n", WWWROOT);
+    printf("   Archivo de usuarios: %s\n", USERS_FILE);
+    printf("--------------------------------------------------\n");
 
     while (1) {
         SOCKET client = accept(server, (struct sockaddr*)&clientAddr, &clientLen);
-        if (client == INVALID_SOCKET) {
-            printf("Error en accept: %d\n", WSAGetLastError());
-            Sleep(100);
-            continue;
-        }
+        if (client == INVALID_SOCKET) continue;
 
         void *bundle = malloc(sizeof(SOCKET) + sizeof(struct sockaddr_in));
-        if (!bundle) {
-            printf("Memoria insuficiente al aceptar cliente\n");
-            closesocket(client);
-            continue;
-        }
-
         memcpy(bundle, &client, sizeof(SOCKET));
         memcpy((char*)bundle + sizeof(SOCKET), &clientAddr, sizeof(struct sockaddr_in));
 
         DWORD tid;
         HANDLE h = CreateThread(NULL, 0, client_thread, bundle, 0, &tid);
-        if (!h) {
-            printf("Error creando hilo cliente (%d)\n", GetLastError());
-            free(bundle);
-            closesocket(client);
-        } else {
-            CloseHandle(h);
-        }
+        if (h) CloseHandle(h);
     }
 
     closesocket(server);
     WSACleanup();
     DeleteCriticalSection(&log_cs);
-    printf("Servidor detenido.\n");
-    getchar();
     return 0;
 }
