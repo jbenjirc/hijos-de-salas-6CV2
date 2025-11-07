@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Servidor HTTP C</title>
+  <link rel="stylesheet" href="css/style.css">
+  <script src="js/main.js" defer></script>
+</head>
+<body>
+  <h1>Bienvenido al Servidor HTTP en C</h1>
+  <p>Este es el contenido servido desde <b>wwwroot/index.html</b>.</p>
+
+  <h2>Rutas disponibles:</h2>
+  <ul>
+    <li><a href="/">/</a> – Página principal</li>
+    <li><a href="/status">/status</a> – Panel del servidor</li>
+    <li><a href="/api/echo">/api/echo</a> – Endpoint de eco (solo POST)</li>
+  </ul>
+
+  <form id="echoForm">
+    <input type="text" id="mensaje" placeholder="Escribe algo..." />
+    <button type="submit">Enviar a /api/echo</button>
+  </form>
+
+  <pre id="respuesta"></pre>
+</body>
+</html>
