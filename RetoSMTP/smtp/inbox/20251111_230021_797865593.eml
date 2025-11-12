@@ -1,0 +1,24 @@
+Received: from localhost by localhost (smtp_server_edu) with SMTP; Tue, 11 Nov 2025 23:00:21 -0600
+From: aperezr1701@alumno.ipn.mx
+To: isalas@ipn.mx
+Subject: Tenemos asuntos pendientes
+Date: Tue, 11 Nov 2025 23:00:21 -0600
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="----=_EduSMTP_797865593"
+
+This is a multipart message in MIME format.
+------=_EduSMTP_797865593
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 7bit
+
+Hola,
+Adjunto encontrarás el archivo solicitado.
+
+------=_EduSMTP_797865593
+Content-Type: application/octet-stream; name="archivo.txt"
+Content-Transfer-Encoding: base64
+Content-Disposition: attachment; filename="archivo.txt"
+
+RXN0ZSBlcyB1biBhcmNoaXZvIGFkanVudG8u
+
+------=_EduSMTP_797865593--

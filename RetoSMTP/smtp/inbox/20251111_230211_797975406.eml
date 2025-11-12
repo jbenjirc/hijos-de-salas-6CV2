@@ -1,0 +1,10 @@
+Received: from localhost by localhost (smtp_server_edu) with SMTP; Tue, 11 Nov 2025 23:02:11 -0600
+From: alexis@local
+To: destino@local
+Subject: Prueba sin adjunto
+Date: Tue, 11 Nov 2025 23:02:11 -0600
+MIME-Version: 1.0
+Content-Type: text/plain; charset="utf-8"
+
+Hola,
+Este es un mensaje de prueba enviado por el cliente SMTP educativo.
