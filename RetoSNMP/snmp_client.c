@@ -1,7 +1,7 @@
 /* snmp_client.c - Cliente SNMP simple para pruebas (Windows)
    
-   Cliente básico para probar el agente SNMP
-   Envía GetRequest y muestra la respuesta
+   Cliente bÃ¡sico para probar el agente SNMP
+   EnvÃ­a GetRequest y muestra la respuesta
    
    Compilar (MinGW): gcc -Wall -o snmp_client.exe snmp_client.c -lws2_32
    Compilar (MSVC):  cl /W3 /D_CRT_SECURE_NO_WARNINGS /Fe:snmp_client.exe snmp_client.c ws2_32.lib
@@ -50,24 +50,24 @@
 #define PDU_GET_RESPONSE 0xA2
 
 void print_menu(void) {
-    printf("\n╔════════════════════════════════════════════════════════╗\n");
-    printf("║        CLIENTE SNMP - PROYECTO REDES ESCOM           ║\n");
-    printf("╚════════════════════════════════════════════════════════╝\n\n");
+    printf("\nâ•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—\n");
+    printf("â•‘        CLIENTE SNMP - PROYECTO REDES ESCOM           â•‘\n");
+    printf("â•šâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•\n\n");
     
     printf("OIDs disponibles para consulta:\n\n");
     printf("Sistema (MIB-II):\n");
-    printf("  1) %s  - Descripción del sistema\n", OID_SYSDESCR);
+    printf("  1) %s  - DescripciÃ³n del sistema\n", OID_SYSDESCR);
     printf("  2) %s  - Tiempo de actividad\n", OID_SYSUPTIME);
     printf("  3) %s  - Nombre del sistema\n", OID_SYSNAME);
     printf("  4) %s  - Contacto del sistema\n", OID_SYSCONTACT);
-    printf("  5) %s  - Ubicación del sistema\n\n", OID_SYSLOCATION);
+    printf("  5) %s  - UbicaciÃ³n del sistema\n\n", OID_SYSLOCATION);
     
-    printf("Métricas de Servicios:\n");
+    printf("MÃ©tricas de Servicios:\n");
     printf("  6) %s - Peticiones FTP\n", OID_FTP_REQUESTS);
     printf("  7) %s - Peticiones HTTP\n", OID_HTTP_REQUESTS);
     printf("  8) %s - Mensajes SMTP\n\n", OID_SMTP_MESSAGES);
     
-    printf("Métricas del Sistema:\n");
+    printf("MÃ©tricas del Sistema:\n");
     printf("  9) %s - Uso de CPU (%%)\n", OID_CPU_USAGE);
     printf(" 10) %s - Uso de Memoria (%%)\n\n", OID_MEM_USAGE);
     
@@ -210,13 +210,14 @@ void parse_response(unsigned char *buf, int len) {
     if (len > 64) printf("...");
     printf("\n");
     
-    // Intentar extraer texto (simplificado)
+    // Extraer texto (simplificado)
     printf("\nTexto extraído: ");
-    int in_string = 0;
+    int found_string = 0;
     for (int i = 0; i < len; i++) {
         if (buf[i] == ASN_OCTETSTR && i + 2 < len) {
             int str_len = buf[i + 1];
             if (str_len > 0 && str_len < 200 && i + 2 + str_len <= len) {
+
                 printf("\"");
                 for (int j = 0; j < str_len; j++) {
                     char c = (char)buf[i + 2 + j];
@@ -225,15 +226,119 @@ void parse_response(unsigned char *buf, int len) {
                     }
                 }
                 printf("\" ");
+                found_string = 1;
+
                 i += 1 + str_len;
-                in_string = 1;
             }
         }
     }
-    if (!in_string) {
-        printf("(datos binarios)");
+    if (!found_string) {
+        printf("(ninguna cadena)");
     }
+
     printf("\n");
+    
+    //Extraer numeros
+    char oid_detected[128] = {0};
+int last_integer = -1;
+unsigned int last_counter32 = 0;
+unsigned int last_timeticks = 0;
+int has_integer = 0, has_counter = 0, has_ticks = 0;
+
+// Detectar OID (solo para saber a qué corresponde)
+for (int i = 0; i < len - 2; i++) {
+    if (buf[i] == ASN_OCTETSTR) {
+        int l = buf[i + 1];
+        if (l > 0 && l < sizeof(oid_detected) && i + 2 + l <= len) {
+            memcpy(oid_detected, &buf[i + 2], l);
+            oid_detected[l] = 0;
+        }
+    }
+}
+
+// Recorrer el buffer y guardar último valor relevante
+for (int i = 0; i < len; i++) {
+    unsigned char type = buf[i];
+
+    if (type == ASN_INTEGER && i + 2 < len) {
+        int ilen = buf[i + 1];
+        if (ilen == 1) last_integer = buf[i + 2];
+        else if (ilen == 4)
+            last_integer = (buf[i+2] << 24) | (buf[i+3] << 16) |
+                           (buf[i+4] << 8 ) |  buf[i+5];
+        has_integer = 1;
+        i += 1 + ilen;
+        continue;
+    }
+
+    if (type == 0x41 && i + 6 <= len) { // COUNTER32
+        last_counter32 =
+            (buf[i+2] << 24) | (buf[i+3] << 16) |
+            (buf[i+4] << 8 ) |  buf[i+5];
+        has_counter = 1;
+        i += 6;
+        continue;
+    }
+
+    if (type == 0x43 && i + 6 <= len) { // TIMETICKS
+        last_timeticks =
+            (buf[i+2] << 24) | (buf[i+3] << 16) |
+            (buf[i+4] << 8 ) |  buf[i+5];
+        has_ticks = 1;
+        i += 6;
+        continue;
+    }
+}
+
+// Lista de OIDs numéricos
+const char* numeric_oids[] = {
+    OID_CPU_USAGE, OID_MEM_USAGE,
+    OID_FTP_REQUESTS, OID_HTTP_REQUESTS, OID_SMTP_MESSAGES,
+    OID_SYSUPTIME
+};
+
+// Verificar si el OID detectado es numérico
+int is_numeric = 0;
+for (int n = 0; n < sizeof(numeric_oids)/sizeof(numeric_oids[0]); n++) {
+    if (strcmp(oid_detected, numeric_oids[n]) == 0) {
+        is_numeric = 1;
+        break;
+    }
+}
+
+if (is_numeric) {
+    printf("\nValores interpretados:\n");
+
+    if (has_integer) {
+        if      (strcmp(oid_detected, OID_CPU_USAGE) == 0)
+            printf("CPU Usage: %d %%\n", last_integer);
+        else if (strcmp(oid_detected, OID_MEM_USAGE) == 0)
+            printf("Memory Usage: %d %%\n", last_integer);
+        else
+            printf("Integer (%s): %d\n", oid_detected, last_integer);
+    }
+
+    if (has_counter) {
+        if      (strcmp(oid_detected, OID_FTP_REQUESTS) == 0)
+            printf("FTP Requests: %u\n", last_counter32);
+        else if (strcmp(oid_detected, OID_HTTP_REQUESTS) == 0)
+            printf("HTTP Requests: %u\n", last_counter32);
+        else if (strcmp(oid_detected, OID_SMTP_MESSAGES) == 0)
+            printf("SMTP Messages: %u\n", last_counter32);
+        else
+            printf("Counter32 (%s): %u\n", oid_detected, last_counter32);
+    }
+
+    if (has_ticks) {
+        if (strcmp(oid_detected, OID_SYSUPTIME) == 0)
+            printf("Uptime: %u ticks (%.2f s)\n", last_timeticks, last_timeticks / 100.0);
+        else
+            printf("TimeTicks (%s): %u\n", oid_detected, last_timeticks);
+    }
+
+    printf("\n");
+}
+
 }
 
 int send_snmp_get(const char *host, const char *oid) {
@@ -264,12 +369,12 @@ int send_snmp_get(const char *host, const char *oid) {
     // Construir request
     int req_len = build_get_request(request, oid, request_id);
     
-    printf("\n════════════════════════════════════════════════════════\n");
+    printf("\nâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•\n");
     printf("Enviando GetRequest:\n");
     printf("  Host:      %s:%d\n", host, SNMP_PORT);
     printf("  OID:       %s (%s)\n", oid, get_oid_name(oid));
     printf("  Community: public\n");
-    printf("════════════════════════════════════════════════════════\n");
+    printf("â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•\n");
     
     // Enviar
     if (sendto(sock, (char*)request, req_len, 0,
@@ -292,11 +397,11 @@ int send_snmp_get(const char *host, const char *oid) {
     
     if (bytes > 0) {
         parse_response(response, bytes);
-        printf("════════════════════════════════════════════════════════\n");
+        printf("â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•\n");
     } else {
-        printf("\n[ERROR] No se recibió respuesta (timeout o error)\n");
-        printf("        Verifique que el agente SNMP esté corriendo.\n");
-        printf("════════════════════════════════════════════════════════\n");
+        printf("\n[ERROR] No se recibiÃ³ respuesta (timeout o error)\n");
+        printf("        Verifique que el agente SNMP estÃ© corriendo.\n");
+        printf("â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•\n");
     }
     
     closesocket(sock);
@@ -320,7 +425,7 @@ int main(int argc, char *argv[]) {
         
         if (scanf("%d", &choice) != 1) {
             while (getchar() != '\n');
-            printf("\nEntrada inválida.\n");
+            printf("\nEntrada invÃ¡lida.\n");
             continue;
         }
         
@@ -331,9 +436,9 @@ int main(int argc, char *argv[]) {
         
         if (choice == 11) {
             // Consultar todos
-            printf("\n\n╔════════════════════════════════════════════════════════╗\n");
-            printf("║         CONSULTANDO TODOS LOS OIDs                    ║\n");
-            printf("╚════════════════════════════════════════════════════════╝\n");
+            printf("\n\nâ•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—\n");
+            printf("â•‘         CONSULTANDO TODOS LOS OIDs                    â•‘\n");
+            printf("â•šâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•\n");
             
             for (int i = 1; i <= 10; i++) {
                 const char* oid = get_oid_by_number(i);
@@ -354,10 +459,11 @@ int main(int argc, char *argv[]) {
                 while (getchar() != '\n');
                 getchar();
             } else {
-                printf("\nOpción inválida.\n");
+                printf("\nOpciÃ³n invÃ¡lida.\n");
             }
         }
     }
     
     return 0;
 }
+
