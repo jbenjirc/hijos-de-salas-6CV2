@@ -1,10 +1,10 @@
 /* snmp_agent.c - Agente SNMP v1/v2c educativo (Windows)
    
-   Características:
+   Caracteristicas:
    - Servidor UDP en puerto 161
-   - Responde a GetRequest y GetNextRequest (básico)
-   - OIDs simulados: sysDescr, sysUpTime, métricas de servicios
-   - Envío opcional de traps a puerto 162 (eventos de alto uso, errores)
+   - Responde a GetRequest y GetNextRequest (basico)
+   - OIDs simulados: sysDescr, sysUpTime, mÃ©tricas de servicios
+   - Envio opcional de traps a puerto 162 (eventos de alto uso, errores)
    
    Compilar (MinGW): gcc -Wall -o snmp_agent.exe snmp_agent.c -lws2_32
    Compilar (MSVC):  cl /W3 /D_CRT_SECURE_NO_WARNINGS /Fe:snmp_agent.exe snmp_agent.c ws2_32.lib
@@ -37,7 +37,7 @@
 #define OID_SYSNAME       "1.3.6.1.2.1.1.5.0"
 #define OID_SYSLOCATION   "1.3.6.1.2.1.1.6.0"
 
-// OIDs personalizados para métricas de servicios
+// OIDs personalizados para mÃ©tricas de servicios
 #define OID_FTP_REQUESTS   "1.3.6.1.4.1.99999.1.1.0"
 #define OID_HTTP_REQUESTS  "1.3.6.1.4.1.99999.1.2.0"
 #define OID_SMTP_MESSAGES  "1.3.6.1.4.1.99999.1.3.0"
@@ -68,7 +68,7 @@
 #define PDU_SET_REQUEST      0xA3
 #define PDU_TRAP             0xA4
 
-// Estructura para almacenar métricas
+// Estructura para almacenar metricas
 typedef struct {
     DWORD start_time;
     int ftp_requests;
@@ -87,12 +87,12 @@ SOCKET g_trap_socket = INVALID_SOCKET;
 // ==================== Funciones auxiliares ====================
 
 DWORD get_uptime_ticks(void) {
-    // Devuelve tiempo en centésimas de segundo desde inicio
+    // Devuelve tiempo en centÃ©simas de segundo desde inicio
     return (GetTickCount() - g_metrics.start_time) / 10;
 }
 
 void update_system_metrics(void) {
-    // Simular métricas del sistema (en producción, leer del sistema real)
+    // Simular mÃ©tricas del sistema (en producciÃ³n, leer del sistema real)
     MEMORYSTATUSEX mem;
     mem.dwLength = sizeof(mem);
     GlobalMemoryStatusEx(&mem);
@@ -107,7 +107,7 @@ void update_system_metrics(void) {
     if (rand() % 12 == 0) g_metrics.smtp_messages++;
 }
 
-// ==================== Codificación BER básica ====================
+// ==================== Codificacion BER basica ====================
 
 int encode_length(unsigned char *buf, int len) {
     if (len < 128) {
@@ -157,8 +157,8 @@ int encode_string(unsigned char *buf, const char *str) {
 }
 
 int encode_oid(unsigned char *buf, const char *oid_str) {
-    // Simplificación: codificar OID como string (no es BER puro)
-    // En producción, convertir "1.3.6.1..." a formato BER real
+    // Simplificacion: codificar OID como string (no es BER puro)
+    // En produccion, convertir "1.3.6.1..." a formato BER real
     return encode_string(buf, oid_str);
 }
 
@@ -182,7 +182,7 @@ int encode_counter32(unsigned char *buf, int value) {
     return 6;
 }
 
-// ==================== Búsqueda de OID ====================
+// ==================== Busqueda de OID ====================
 
 int get_oid_value(const char *oid, unsigned char *value_buf, int *value_len) {
     // Devuelve tipo y valor para el OID solicitado
@@ -244,23 +244,77 @@ int get_oid_value(const char *oid, unsigned char *value_buf, int *value_len) {
 void process_get_request(unsigned char *req_buf, int req_len, 
                         unsigned char *resp_buf, int *resp_len,
                         struct sockaddr_in *client_addr) {
-    // Simplificación: parsear manualmente (en producción usar librería ASN.1)
+    // SimplificaciÃ³n: parsear manualmente (en producciÃ³n usar librerÃ­a ASN.1)
     
     printf("Procesando GetRequest desde %s:%d\n", 
            inet_ntoa(client_addr->sin_addr), 
            ntohs(client_addr->sin_port));
     
     // Por simplicidad, respondemos con datos fijos de sysDescr
-    // (un parser BER completo requeriría más código)
+    // (un parser BER completo requerirÃ­a mÃ¡s cÃ³digo)
     
     int offset = 0;
     unsigned char value[256];
     int value_len = 0;
     
-    // Simular respuesta básica
-    get_oid_value(OID_SYSDESCR, value, &value_len);
+    // Simular respuesta bÃ¡sica
+    //get_oid_value(OID_SYSDESCR, value, &value_len);
+    //get_oid_value(OID_SYSOBJECTID, value, &value_len);
+    //get_oid_value(OID_SYSUPTIME, value, &value_len);
+    //get_oid_value(OID_SYSCONTACT, value, &value_len);
+    //get_oid_value(OID_SYSNAME, value, &value_len);
+    //get_oid_value(OID_SYSLOCATION, value, &value_len);
+    //get_oid_value(OID_FTP_REQUESTS, value, &value_len);
+    //get_oid_value(OID_HTTP_REQUESTS, value, &value_len);
+    //get_oid_value(OID_SMTP_MESSAGES, value, &value_len);
+    //get_oid_value(OID_CPU_USAGE, value, &value_len);
+    //get_oid_value(OID_MEM_USAGE, value, &value_len);
     
-    // Construir respuesta SNMP básica (simplificada)
+    // EXTRAER OID DEL REQUEST (parser súper simplificado)
+    // Busca el primer ASN_OCTETSTR después del header — porque tú codificas el OID como string
+    char requested_oid[128] = {0};
+    
+    int pdu_start = -1;
+    for (int i = 0; i < req_len; i++) {
+        if (req_buf[i] == PDU_GET_REQUEST) {
+           pdu_start = i;
+           break;
+        }
+    }
+
+    if (pdu_start == -1) {
+       printf("No se encontro PDU GET\n");
+       return;
+    }
+    
+    int i = pdu_start + 2;
+    i += 2 + req_buf[i+1];
+    i += 2 + req_buf[i+1];
+    i += 2 + req_buf[i+1];
+    i += 2;
+    i += 2;
+    
+    if(req_buf[i] == ASN_OCTETSTR){
+        int len = req_buf[i+1];
+        if(len > 0 && len < sizeof(requested_oid)){
+            memcpy(requested_oid, &req_buf[i+2], len);
+            requested_oid[len] = 0;
+        }
+    }
+
+    printf("OID solicitado: %s\n", requested_oid);
+
+    // obtener el valor real del OID
+    if (!get_oid_value(requested_oid, value, &value_len)) {
+       // si no existe ? devolver NULL
+       value[0] = ASN_NULL;
+       value[1] = 0;
+       value_len = 2;
+    }
+
+    
+    
+    // Construir respuesta SNMP bÃ¡sica (simplificada)
     resp_buf[offset++] = ASN_SEQUENCE;
     offset++; // placeholder para longitud
     
@@ -285,21 +339,22 @@ void process_get_request(unsigned char *req_buf, int req_len,
     
     // Varbind list
     resp_buf[offset++] = ASN_SEQUENCE;
-    offset++; // placeholder
+    int vb_list_pos = offset++; // placeholder
     
     // Varbind
     resp_buf[offset++] = ASN_SEQUENCE;
-    offset++; // placeholder
+    int vb_pos = offset++; // placeholder
     
     // OID
-    offset += encode_oid(resp_buf + offset, OID_SYSDESCR);
+    offset += encode_oid(resp_buf + offset, requested_oid);
     
     // Value
     memcpy(resp_buf + offset, value, value_len);
     offset += value_len;
     
     // Ajustar longitudes (simplificado)
-    resp_buf[1] = (unsigned char)(offset - 2);
+    resp_buf[vb_pos] = (unsigned char)(offset - vb_pos - 1);
+    resp_buf[vb_list_pos] = (unsigned char)(offset - vb_list_pos - 1);
     
     *resp_len = offset;
     
@@ -314,7 +369,7 @@ void send_trap(const char *trap_type, const char *description) {
     
     printf("\n[TRAP] Enviando trap: %s - %s\n", trap_type, description);
     
-    // Construir paquete Trap básico
+    // Construir paquete Trap bÃ¡sico
     trap_buf[offset++] = ASN_SEQUENCE;
     offset++; // placeholder longitud
     
@@ -348,7 +403,7 @@ void send_trap(const char *trap_type, const char *description) {
     // Timestamp
     offset += encode_timeticks(trap_buf + offset, get_uptime_ticks());
     
-    // Varbind list con descripción
+    // Varbind list con descripciÃ³n
     trap_buf[offset++] = ASN_SEQUENCE;
     int varbind_start = offset;
     offset++;
@@ -418,9 +473,9 @@ DWORD WINAPI monitor_thread(LPVOID param) {
 
 void print_status(void) {
     system("cls");
-    printf("╔════════════════════════════════════════════════════════════╗\n");
-    printf("║          AGENTE SNMP v1/v2c - PROYECTO REDES ESCOM       ║\n");
-    printf("╚════════════════════════════════════════════════════════════╝\n\n");
+    printf("â•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—\n");
+    printf("â•‘          AGENTE SNMP v1/v2c - PROYECTO REDES ESCOM       â•‘\n");
+    printf("â•šâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•\n\n");
     
     printf("Estado del Agente:\n");
     printf("  Puerto:           UDP %d\n", SNMP_PORT);
@@ -429,12 +484,12 @@ void print_status(void) {
            get_uptime_ticks(), get_uptime_ticks() / 100.0);
     printf("  Trap Manager:     %s:%d\n\n", g_trap_manager_ip, g_trap_manager_port);
     
-    printf("Métricas del Sistema:\n");
+    printf("MÃ©tricas del Sistema:\n");
     printf("  CPU Usage:        %d%%\n", g_metrics.cpu_usage);
     printf("  Memoria:          %d%%\n", g_metrics.mem_usage);
     printf("  Errores:          %d\n\n", g_metrics.error_count);
     
-    printf("Métricas de Servicios:\n");
+    printf("MÃ©tricas de Servicios:\n");
     printf("  FTP Requests:     %d\n", g_metrics.ftp_requests);
     printf("  HTTP Requests:    %d\n", g_metrics.http_requests);
     printf("  SMTP Messages:    %d\n\n", g_metrics.smtp_messages);
@@ -451,7 +506,7 @@ void print_status(void) {
     printf("\n");
     printf("Escuchando peticiones SNMP...\n");
     printf("Presione Ctrl+C para detener.\n");
-    printf("════════════════════════════════════════════════════════════\n\n");
+    printf("â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•\n\n");
 }
 
 int main(int argc, char *argv[]) {
@@ -466,7 +521,7 @@ int main(int argc, char *argv[]) {
     // Configurar consola
     SetConsoleOutputCP(65001);
     
-    // Inicializar métricas
+    // Inicializar mÃ©tricas
     g_metrics.start_time = GetTickCount();
     srand((unsigned)time(NULL));
     
@@ -489,7 +544,7 @@ int main(int argc, char *argv[]) {
         return 1;
     }
     
-    // Configurar dirección
+    // Configurar direcciÃ³n
     memset(&server_addr, 0, sizeof(server_addr));
     server_addr.sin_family = AF_INET;
     server_addr.sin_addr.s_addr = htonl(INADDR_ANY);
@@ -541,3 +596,4 @@ int main(int argc, char *argv[]) {
     
     return 0;
 }
+
